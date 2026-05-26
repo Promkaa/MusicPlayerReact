@@ -22,6 +22,14 @@ async def create_room(room: Room):
     if room.id in datastore.rooms:
         raise HTTPException(status_code=400, detail="Room already exists")
     
+    # Убеждаемся, что votingDuration есть и валиден
+    if not hasattr(room, 'votingDuration') or room.votingDuration is None:
+        room.votingDuration = 60
+    
+    # Валидация
+    if room.votingDuration < 10 or room.votingDuration > 300:
+        raise HTTPException(status_code=400, detail="Voting duration must be between 10 and 300 seconds")
+    
     datastore.rooms[room.id] = room
     datastore.save_rooms_to_file()
     return {"message": "Room created", "room": room}
@@ -270,3 +278,74 @@ async def remove_track_from_room(room_id: str, track_id: str, user_id: str):
     })
     
     return {"message": f"Track '{track_to_remove.title}' removed from room"}
+
+@router.post("/rooms/{room_id}/playback-mode")
+async def update_playback_mode(room_id: str, request: Request):
+    data = await request.json()
+    new_mode = data.get("playback_mode")
+    host_id = data.get("host_id", None)
+    requesting_user_id = data.get("user_id")
+    
+    if room_id not in datastore.rooms:
+        raise HTTPException(status_code=404, detail="Room not found")
+    
+    room = datastore.rooms[room_id]
+    
+    if room.creator_id != requesting_user_id and room.creator != requesting_user_id:
+        raise HTTPException(status_code=403, detail="Only room creator can change playback mode")
+    
+    if new_mode not in ["sync", "host"]:
+        raise HTTPException(status_code=400, detail="Invalid playback mode")
+    
+    room.playback_mode = new_mode
+    room.host_id = host_id if new_mode == "host" else None
+    
+    datastore.rooms[room_id] = room
+    datastore.save_rooms_to_file()
+    
+    from managers import manager
+    await manager.broadcast_to_room(room_id, {
+        "type": "playback_mode_changed",
+        "playback_mode": new_mode,
+        "host_id": room.host_id
+    })
+    
+    return {"success": True}
+
+@router.post("/rooms/{room_id}/player/control")
+async def control_player(room_id: str, request: Request):
+    data = await request.json()
+    action = data.get("action") 
+    value = data.get("value")    
+    user_id = data.get("user_id")
+    user_name = data.get("user_name")
+    
+    if room_id not in datastore.rooms:
+        raise HTTPException(status_code=404, detail="Room not found")
+    
+    room = datastore.rooms[room_id]
+    
+    if room.playback_mode != "sync":
+        raise HTTPException(status_code=400, detail="Sync mode not active")
+    
+    if action == "play":
+        room.isPlaying = True
+    elif action == "pause":
+        room.isPlaying = False
+    elif action == "seek":
+        room.currentTime = value
+    
+    datastore.rooms[room_id] = room
+    datastore.save_rooms_to_file()
+    
+    from managers import manager
+    await manager.broadcast_to_room(room_id, {
+        "type": "sync_command",
+        "action": action,
+        "value": value,
+        "user_id": user_id,
+        "user_name": user_name,
+        "timestamp": datetime.now().isoformat()
+    })
+    
+    return {"success": True}
