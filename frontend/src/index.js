@@ -1,7 +1,8 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import Main from './components/Main';
 
-import App from './App';
+import './css/playlist.css';
 
 const originalError = console.error;
 console.error = (...args) => {
@@ -14,6 +15,6 @@ console.error = (...args) => {
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
     <React.StrictMode>
-        <App />
+        <Main />
     </React.StrictMode>
 );
