@@ -1,6 +1,8 @@
+// frontend/src/components/RoomInterface.jsx
+
 import React, { useEffect, useRef, useState } from 'react';
-import { TrackCover, VotingCard } from './SharedComponents';
-import HLSPlayer from '../HLSPlayer';
+import { TrackCover, VotingCard, PlaylistCover } from './SharedComponents';
+import HLSPlayer from './HLSPlayer';
 import { formatTime } from '../utils/helpers';
 
 const RoomInterface = ({
@@ -16,13 +18,62 @@ const RoomInterface = ({
     roomCurrentTrackIndex, roomShuffledIndices, activeVotings, voteForTrack,
     audioRef, currentTime, duration, handleSeek, volume, setVolume, 
     prevTrack, nextTrack, pauseTrack, setIsPlaying, isLoading, 
-    TrackCoverComponent, VotingCardComponent
+    TrackCoverComponent, VotingCardComponent,
+    onCancelProposal,
 }) => {
+    const TrackCoverComponentToUse = TrackCoverComponent || TrackCover;
+    const VotingCardComponentToUse = VotingCardComponent || VotingCard;
+    
     const hlsPlayerRef = useRef(null);
     const [localCurrentTime, setLocalCurrentTime] = useState(0);
     const [localDuration, setLocalDuration] = useState(0);
     const isSeekingRef = useRef(false);
 
+    // Обработчик play/pause
+    const handlePlayPause = () => {
+        if (!currentTrack) return;
+        
+        if (isPlaying) {
+            if (pauseTrack) pauseTrack();
+        } else {
+            if (currentTrack) {
+                setIsPlaying(true);
+                const videoElement = hlsPlayerRef.current;
+                if (videoElement) {
+                    videoElement.play().catch(e => console.error('Play error:', e));
+                }
+            }
+        }
+    };
+
+    // Обработчик следующего трека
+    const handleNextTrack = () => {
+        if (nextTrack) nextTrack();
+    };
+
+    // Обработчик предыдущего трека
+    const handlePrevTrack = () => {
+        if (prevTrack) prevTrack();
+    };
+
+    // Обработчик перемотки
+    const handleSyncSeek = (e) => {
+        const newTime = parseFloat(e.target.value);
+        const videoElement = hlsPlayerRef.current;
+        if (videoElement) {
+            isSeekingRef.current = true;
+            videoElement.currentTime = newTime;
+            setLocalCurrentTime(newTime);
+            setTimeout(() => {
+                isSeekingRef.current = false;
+            }, 500);
+        }
+        if (handleSeek) {
+            handleSeek(e);
+        }
+    };
+
+    // Эффекты для HLS плеера
     useEffect(() => {
         const videoElement = hlsPlayerRef.current;
         if (!videoElement || !currentTrack?.url) return;
@@ -67,8 +118,6 @@ const RoomInterface = ({
         const handleLoadedMetadata = () => {
             console.log('🎵 Video metadata loaded, duration:', videoElement.duration);
             setLocalDuration(videoElement.duration);
-            if (duration !== videoElement.duration) {
-            }
         };
 
         const handlePlay = () => {
@@ -87,7 +136,7 @@ const RoomInterface = ({
 
         const handleEnded = () => {
             console.log('🎵 Video ended');
-            nextTrack();
+            handleNextTrack();
         };
 
         videoElement.addEventListener('timeupdate', handleTimeUpdate);
@@ -136,20 +185,6 @@ const RoomInterface = ({
         }
     };
 
-    const handlePlayPause = () => {
-        if (isPlaying) {
-            if (pauseTrack) pauseTrack();
-        } else {
-            if (currentTrack) {
-                setIsPlaying(true);
-                const videoElement = hlsPlayerRef.current;
-                if (videoElement) {
-                    videoElement.play().catch(e => console.error('Play error:', e));
-                }
-            }
-        }
-    };
-
     return (
         <div className="room-interface">
             <div className="room-header">
@@ -159,7 +194,9 @@ const RoomInterface = ({
                         {currentRoom.scenario === 'withVoting' && '🗳️ Голосование'}
                         {currentRoom.scenario === 'withoutVoting' && '🎵 Без голосования'}
                     </span>
+                    
                     <button onClick={createInviteLink} className="invite-link-btn">🔗 Ссылка-приглашение</button>
+                    
                     {(currentRoom.creator === currentUsername || currentRoom.creator_id === currentUserId) && (
                         <button onClick={() => {
                             setRoomToDelete(currentRoom);
@@ -317,7 +354,7 @@ const RoomInterface = ({
                                             return (
                                                 <div key={track.id || track.vk_id || index} className="vk-track-item">
                                                     <div className="track-info">
-                                                        <TrackCoverComponent track={track} size="small" />
+                                                        <TrackCoverComponentToUse track={track} size="small" />
                                                         <div className="track-details">
                                                             <div className="track-title">{track.title || 'Без названия'}</div>
                                                             <div className="track-artist">{track.artist || 'Неизвестный'}</div>
@@ -393,7 +430,7 @@ const RoomInterface = ({
                                                 <div className="track-number">
                                                     {isActive && isPlaying ? '🎵' : (displayIndex + 1)}
                                                 </div>
-                                                <TrackCoverComponent track={track} size="small" />
+                                                <TrackCoverComponentToUse track={track} size="small" />
                                                 <div className="track-details">
                                                     <div className="track-title">{track.title || 'Без названия'}</div>
                                                     <div className="track-artist">{track.artist || 'Неизвестный'}</div>
@@ -440,10 +477,12 @@ const RoomInterface = ({
                             </div>
                             <div className="tracks-list-proposed">
                                 {activeVotings.map((voting) => (
-                                    <VotingCardComponent
+                                    <VotingCardComponentToUse
                                         key={voting.id}
                                         voting={voting}
                                         onVote={voteForTrack}
+                                        onCancel={onCancelProposal}
+                                        currentUserId={currentUserId}
                                     />
                                 ))}
                             </div>
@@ -455,7 +494,7 @@ const RoomInterface = ({
             <div className="room-player">
                 <div className="room-player-content">
                     <div className="room-player-track-info">
-                        <TrackCoverComponent track={currentTrack} size="small" className="room-player-cover" />
+                        <TrackCoverComponentToUse track={currentTrack} size="small" className="room-player-cover" />
                         <div className="room-player-track-details">
                             <div className="room-player-track-title">{currentTrack?.title || 'Выберите трек'}</div>
                             <div className="room-player-track-artist">{currentTrack?.artist || 'Нажмите на песню в плейлисте комнаты'}</div>
@@ -472,11 +511,27 @@ const RoomInterface = ({
                     
                     <div className="room-player-controls">
                         <div className="room-control-group">
-                            <button className="room-control-btn" onClick={prevTrack} disabled={!currentTrack || roomTracks.length === 0}>⏮️</button>
-                            <button className="room-control-btn room-play-btn" onClick={handlePlayPause} disabled={!currentTrack || isLoading}>
+                            <button 
+                                className="room-control-btn" 
+                                onClick={handlePrevTrack} 
+                                disabled={!currentTrack || roomTracks.length === 0}
+                            >
+                                ⏮️
+                            </button>
+                            <button 
+                                className="room-control-btn room-play-btn" 
+                                onClick={handlePlayPause} 
+                                disabled={!currentTrack || isLoading}
+                            >
                                 {isLoading ? '⏳' : (isPlaying ? '⏸️' : '▶️')}
                             </button>
-                            <button className="room-control-btn" onClick={nextTrack} disabled={!currentTrack || roomTracks.length === 0}>⏭️</button>
+                            <button 
+                                className="room-control-btn" 
+                                onClick={handleNextTrack} 
+                                disabled={!currentTrack || roomTracks.length === 0}
+                            >
+                                ⏭️
+                            </button>
                         </div>
                         <div className="room-progress-container">
                             <span className="room-time">{formatTime(currentTime || localCurrentTime)}</span>
@@ -485,7 +540,7 @@ const RoomInterface = ({
                                 className="room-progress-bar"
                                 value={currentTime || localCurrentTime}
                                 max={duration || localDuration || 0}
-                                onChange={handleVideoSeek}
+                                onChange={handleSyncSeek}
                                 disabled={!currentTrack}
                             />
                             <span className="room-time">{formatTime(duration || localDuration)}</span>
@@ -505,28 +560,6 @@ const RoomInterface = ({
                     </div>
                 </div>
             </div>
-        </div>
-    );
-};
-
-const PlaylistCover = ({ playlist, className }) => {
-    const [imgError, setImgError] = React.useState(false);
-    return (
-        <div className={`playlist-cover-wrapper ${className}`}>
-            {playlist?.cover_url && !imgError ? (
-                <img
-                    src={playlist.cover_url}
-                    alt={playlist?.title || 'Плейлист'}
-                    className="playlist-cover-img"
-                    onError={() => setImgError(true)}
-                />
-            ) : (
-                <div className="playlist-cover-placeholder">
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                    </svg>
-                </div>
-            )}
         </div>
     );
 };
