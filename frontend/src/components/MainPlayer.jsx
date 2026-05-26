@@ -44,7 +44,7 @@ const MainPlayer = ({
         };
 
         const handleLoadedMetadata = () => {
-            console.log('🎵 Main player duration:', videoElement.duration);
+            console.log('Main player duration:', videoElement.duration);
             setLocalDuration(videoElement.duration);
             if (setMainPlayerDuration) {
                 setMainPlayerDuration(videoElement.duration);
@@ -52,26 +52,26 @@ const MainPlayer = ({
         };
 
         const handlePlay = () => {
-            console.log('🎵 Main player playing');
+            console.log('Main player playing');
             if (!mainPlayerIsPlaying) {
                 setMainPlayerIsPlaying(true);
             }
         };
 
         const handlePause = () => {
-            console.log('🎵 Main player paused');
+            console.log('Main player paused');
             if (mainPlayerIsPlaying) {
                 setMainPlayerIsPlaying(false);
             }
         };
 
         const handleEnded = () => {
-            console.log('🎵 Main player ended');
+            console.log('Main player ended');
             mainPlayerNextTrack();
         };
 
         const handleError = (e) => {
-            console.error('❌ Main player error:', e);
+            console.error('Main player error:', e);
         };
 
         videoElement.addEventListener('timeupdate', handleTimeUpdate);
