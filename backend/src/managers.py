@@ -30,6 +30,19 @@ class ConnectionManager:
                     await connection.send_json(message)
                 except:
                     pass
+    
+    async def send_to_user(self, user_id: str, message: dict) -> bool:
+        room_id = self.user_rooms.get(user_id)
+        if room_id and room_id in self.active_connections:
+            for ws in self.active_connections[room_id]:
+                pass
+        return False
+    
+    async def send_to_user_by_websocket(self, websocket: WebSocket, message: dict):
+        try:
+            await websocket.send_json(message)
+        except:
+            pass
 
 
 def normalize_track_data(track_data: Dict[str, Any]) -> Track:
