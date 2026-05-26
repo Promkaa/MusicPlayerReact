@@ -975,8 +975,6 @@ body {
     cursor: pointer;
 }
 
-.join-room-btn:hover, .delete-room-btn:hover {
-}
 
 .empty-rooms {
     text-align: center;
@@ -1497,8 +1495,6 @@ body {
     transition: all 0.3s;
 }
 
-.play-next-btn:hover {
-}
 
 .add-to-room-btn, .remove-track-btn {
     padding: 6px 12px;
@@ -1704,8 +1700,6 @@ body {
     color: white;
 }
 
-.vote-btn-yes:hover, .vote-btn-no:hover {
-}
 
 .vote-status-detailed {
     text-align: center;
@@ -2044,8 +2038,6 @@ body {
     font-size: 18px;
 }
 
-.main-control-btn:hover {
-}
 
 .main-play-btn {
     width: 50px;
@@ -2186,8 +2178,6 @@ body {
     font-size: 18px;
 }
 
-.room-control-btn:hover:not(:disabled) {
-}
 
 .room-control-btn:disabled {
     opacity: 0.5;
@@ -2213,9 +2203,9 @@ body {
 }
 
 .room-progress-bar {
+    -webkit-appearance: none;
     flex: 1;
     height: 4px;
-    -webkit-appearance: none;
     background: #e0e0e0;
     border-radius: 2px;
     outline: none;
