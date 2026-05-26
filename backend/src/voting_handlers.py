@@ -6,7 +6,6 @@ from managers import manager
 
 
 async def voting_timer_countdown(room_id: str, session_id: str, voting_type: str = "add"):
-    """Таймер обратного отсчета для голосования"""
     if voting_type == "add":
         session = datastore.voting_sessions.get(session_id)
     else:
@@ -18,6 +17,16 @@ async def voting_timer_countdown(room_id: str, session_id: str, voting_type: str
     try:
         while session.time_remaining > 0:
             await asyncio.sleep(1)
+            
+            # Заново получаем сессию (могла быть отменена)
+            if voting_type == "add":
+                session = datastore.voting_sessions.get(session_id)
+            else:
+                session = datastore.vote_next_sessions.get(session_id)
+            
+            if not session or session.status != "active":
+                return  # Выход, если сессия отменена или завершена
+            
             session.time_remaining -= 1
             
             room = datastore.rooms.get(room_id)
@@ -53,8 +62,18 @@ async def voting_timer_countdown(room_id: str, session_id: str, voting_type: str
 
 
 async def auto_complete_voting(room_id: str, session_id: str, voting_type: str = "add"):
-    """Автоматическое завершение голосования через 60 секунд (для добавления) или 30 секунд (для "следующим")"""
-    wait_time = 60 if voting_type == "add" else 30
+    if voting_type == "add":
+        session = datastore.voting_sessions.get(session_id)
+    else:
+        session = datastore.vote_next_sessions.get(session_id)
+    
+    if not session:
+        return
+
+    wait_time = getattr(session, 'duration_seconds', 60)
+    if voting_type == "next":
+        wait_time = getattr(session, 'duration_seconds', 30)
+
     
     for i in range(wait_time):
         await asyncio.sleep(1)
@@ -64,29 +83,17 @@ async def auto_complete_voting(room_id: str, session_id: str, voting_type: str =
         else:
             session = datastore.get_vote_next_session(room_id)
         
+        # Если сессия уже завершена (кем-то другим) — выходим
         if not session or session.status != "active":
-            print(f"⏹️ Auto complete: session {session_id} no longer active")
-            return
-        
-        # Проверяем, не достигнуто ли условие победы
-        if datastore.has_reached_win_condition(room_id, voting_type):
-            print(f"✅ Auto complete: win condition reached for session {session_id}")
-            await check_and_complete_voting(room_id, session_id, voting_type)
-            return
-        
-        # Проверяем, не проголосовали ли все
-        if datastore.has_all_voted(room_id, voting_type):
-            print(f"✅ Auto complete: all voted detected for session {session_id}")
-            await check_and_complete_voting(room_id, session_id, voting_type)
             return
     
-    print(f"⏰ Auto complete: timeout reached for session {session_id}")
+    print(f"Auto complete: timeout reached for session {session_id}")
     
     if voting_type == "add":
         session = datastore.get_voting_session(room_id)
     else:
         session = datastore.get_vote_next_session(room_id)
-    
+
     if session and session.id == session_id and session.status == "active":
         if voting_type == "add":
             result = datastore.complete_voting(room_id)
@@ -104,9 +111,9 @@ async def auto_complete_voting(room_id: str, session_id: str, voting_type: str =
                     room.tracks.append(result["session"].track)
                     datastore.rooms[room_id] = room
                     datastore.save_rooms_to_file()
-                    print(f"✅ Track added to playlist: {result['session'].track.title}")
+                    print(f"Track added to playlist: {result['session'].track.title}")
                 else:
-                    print(f"❌ Track rejected: {result['session'].track.title if result['session'].track else 'Unknown'}")
+                    print(f"Track rejected: {result['session'].track.title if result['session'].track else 'Unknown'}")
                 
                 await manager.broadcast_to_room(room_id, {
                     "type": "voting_ended",
@@ -141,7 +148,7 @@ async def auto_complete_voting(room_id: str, session_id: str, voting_type: str =
                             room.tracks.insert(new_position, track_to_move)
                         datastore.rooms[room_id] = room
                         datastore.save_rooms_to_file()
-                        print(f"✅ Track moved to next position: {result['session'].track.title}")
+                        print(f"Track moved to next position: {result['session'].track.title}")
                 
                 await manager.broadcast_to_room(room_id, {
                     "type": "vote_next_ended",
@@ -170,13 +177,13 @@ async def check_and_complete_voting(room_id: str, session_id: str, voting_type: 
     if not session or session.status != "active":
         return False
     
-    print(f"🔍 check_and_complete_voting: room={room_id}, type={voting_type}, all_voted={all_voted}, win_condition={win_condition}")
+    print(f"check_and_complete_voting: room={room_id}, type={voting_type}, all_voted={all_voted}, win_condition={win_condition}")
     
     # Завершаем голосование если:
     # 1. Все проголосовали ИЛИ
     # 2. Достигнуто условие победы (результат уже ясен)
     if all_voted or win_condition:
-        print(f"✅ Completing voting for session {session_id} (all_voted={all_voted}, win_condition={win_condition})")
+        print(f"Completing voting for session {session_id} (all_voted={all_voted}, win_condition={win_condition})")
         
         # Отменяем таймеры
         if voting_type == "add":
@@ -203,9 +210,9 @@ async def check_and_complete_voting(room_id: str, session_id: str, voting_type: 
                     room.tracks.append(result["session"].track)
                     datastore.rooms[room_id] = room
                     datastore.save_rooms_to_file()
-                    print(f"✅ Track added to playlist: {result['session'].track.title}")
+                    print(f"Track added to playlist: {result['session'].track.title}")
                 else:
-                    print(f"❌ Track rejected: {result['session'].track.title if result['session'].track else 'Unknown'}")
+                    print(f"Track rejected: {result['session'].track.title if result['session'].track else 'Unknown'}")
                 
                 await manager.broadcast_to_room(room_id, {
                     "type": "voting_ended",
@@ -240,7 +247,7 @@ async def check_and_complete_voting(room_id: str, session_id: str, voting_type: 
                             room.tracks.insert(new_position, track_to_move)
                         datastore.rooms[room_id] = room
                         datastore.save_rooms_to_file()
-                        print(f"✅ Track moved to next position: {result['session'].track.title}")
+                        print(f"Track moved to next position: {result['session'].track.title}")
                 
                 await manager.broadcast_to_room(room_id, {
                     "type": "vote_next_ended",
