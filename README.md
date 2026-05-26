@@ -1,4 +1,4 @@
-# PlayListColab
+# MusicPlayerReact
 
 # Техническая спецификация проекта
 
