@@ -1,6 +1,18 @@
+// frontend/src/components/Modals.jsx
+// ПОЛНОСТЬЮ ЗАМЕНИТЬ файл
+
 import React from 'react';
 
-export const CreateRoomModal = ({ setShowCreateRoomModal, roomName, setRoomName, roomScenario, setRoomScenario, createRoom }) => {
+export const CreateRoomModal = ({ 
+    setShowCreateRoomModal, 
+    roomName, 
+    setRoomName, 
+    roomScenario, 
+    setRoomScenario,
+    votingDuration = 60,      // 🆕 со значением по умолчанию
+    setVotingDuration,        // 🆕
+    createRoom 
+}) => {
     return (
         <div className="modal-overlay" onClick={() => setShowCreateRoomModal(false)}>
             <div className="modal-content" onClick={(e) => e.stopPropagation()}>
@@ -47,6 +59,39 @@ export const CreateRoomModal = ({ setShowCreateRoomModal, roomName, setRoomName,
                         </label>
                     </div>
                 </div>
+                
+                {/* 🆕 Блок настройки времени голосования (только для withVoting) */}
+                {roomScenario === "withVoting" && (
+                    <div className="voting-duration-group">
+                        <label className="duration-label">⏱️ Время голосования:</label>
+                        <div className="duration-slider-container">
+                            <input
+                                type="range"
+                                min="10"
+                                max="300"
+                                step="5"
+                                value={votingDuration}
+                                onChange={(e) => setVotingDuration && setVotingDuration(parseInt(e.target.value))}
+                                className="duration-slider"
+                            />
+                            <div className="duration-value">
+                                <input
+                                    type="number"
+                                    min="10"
+                                    max="300"
+                                    value={votingDuration}
+                                    onChange={(e) => setVotingDuration && setVotingDuration(parseInt(e.target.value))}
+                                    className="duration-number"
+                                />
+                                <span>секунд</span>
+                            </div>
+                        </div>
+                        <div className="duration-hint">
+                            💡 Минимальное: 10 сек, максимальное: 300 сек (5 минут)
+                        </div>
+                    </div>
+                )}
+                
                 <div className="modal-buttons">
                     <button onClick={createRoom} className="create-room-btn">Создать</button>
                     <button onClick={() => setShowCreateRoomModal(false)} className="cancel-btn">Отмена</button>
