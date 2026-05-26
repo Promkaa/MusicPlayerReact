@@ -13,9 +13,7 @@ app.add_middleware(
         "http://localhost:3000",
         "http://localhost:3001",
         "http://127.0.0.1:3000",
-        "http://192.168.31.144:3000",
-        "http://192.168.31.*:3000",
-        "*"
+        # свои ipшники подставляем (ищи в ipconfig)
     ],
     allow_credentials=True,
     allow_methods=["*"],
