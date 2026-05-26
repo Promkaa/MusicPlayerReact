@@ -1,3 +1,5 @@
+// frontend/src/components/SharedComponents.jsx
+
 import { memo, useState } from 'react';
 import { getCoverUrl } from '../utils/helpers';
 
@@ -27,6 +29,86 @@ export const TrackCover = memo(({ track, size = 'small', className = '' }) => {
 
 TrackCover.displayName = 'TrackCover';
 
+// ==================== ЕДИНЫЙ VotingCard (с кнопкой отмены) ====================
+export const VotingCard = ({ voting, onVote, onCancel, currentUserId }) => {
+    const isAuthor = voting.proposed_by_id === currentUserId;
+    const isActive = voting.time_remaining > 0;
+    
+    return (
+        <div className="voting-card">
+            <div className="voting-card-header">
+                <div className="voting-track-info">
+                    <TrackCover track={voting.track} size="small" />
+                    <div className="voting-track-details">
+                        <div className="voting-track-title">{voting.track.title}</div>
+                        <div className="voting-track-artist">{voting.track.artist}</div>
+                        <div className="voting-proposed-by">
+                            🗳️ Предложил: {voting.proposed_by}
+                            {voting.type === 'next' && ' (следующим)'}
+                        </div>
+                    </div>
+                </div>
+                <div className="voting-time">
+                    ⏱️ {Math.floor(voting.time_remaining / 60)}:
+                    {(voting.time_remaining % 60).toString().padStart(2, '0')}
+                </div>
+            </div>
+            
+            <div className="voting-card-stats">
+                <div className="voting-progress">
+                    <div 
+                        className="voting-progress-yes" 
+                        style={{ width: `${voting.total_participants > 0 ? (voting.votes_yes / voting.total_participants) * 100 : 0}%` }}
+                    />
+                </div>
+                <div className="voting-numbers">
+                    <span className="votes-yes">👍 {voting.votes_yes}</span>
+                    <span className="votes-no">👎 {voting.votes_no}</span>
+                    <span className="votes-total">Всего: {voting.total_voted}/{voting.total_participants}</span>
+                </div>
+            </div>
+            
+            <div className="voting-card-buttons">
+                {!voting.user_vote && isActive && (
+                    <>
+                        <button 
+                            className="vote-yes-btn" 
+                            onClick={() => onVote(voting.id, 'yes')}
+                        >
+                            👍 За
+                        </button>
+                        <button 
+                            className="vote-no-btn" 
+                            onClick={() => onVote(voting.id, 'no')}
+                        >
+                            👎 Против
+                        </button>
+                    </>
+                )}
+                {voting.user_vote && (
+                    <span className="voted-indicator">
+                        Вы проголосовали {voting.user_vote === 'yes' ? '👍 ЗА' : '👎 ПРОТИВ'}
+                    </span>
+                )}
+                
+                {/* Кнопка отмены для автора */}
+                {isAuthor && isActive && onCancel && (
+                    <button 
+                        className="cancel-proposal-btn"
+                        onClick={() => onCancel(voting.id)}
+                        title="Отменить предложение"
+                    >
+                        ❌ Отменить
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+};
+
+VotingCard.displayName = 'VotingCard';
+
+// ==================== PlaylistCover ====================
 export const PlaylistCover = memo(({ playlist, className = '' }) => {
     const [imgError, setImgError] = useState(false);
     
@@ -51,110 +133,3 @@ export const PlaylistCover = memo(({ playlist, className = '' }) => {
 });
 
 PlaylistCover.displayName = 'PlaylistCover';
-
-export const VotingCard = memo(({ voting, onVote, TrackCoverComponent }) => {
-    const hasUserVoted = voting.user_vote !== null;
-    const votesYesCount = voting.votes_yes || 0;
-    const votesNoCount = voting.votes_no || 0;
-    const totalVotes = votesYesCount + votesNoCount;
-    const timeRemaining = voting.time_remaining || 0;
-    const isExpired = timeRemaining <= 0;
-    const isNextVoting = voting.type === 'next';
-    
-    const TrackCoverComponentToUse = TrackCoverComponent || TrackCover;
-    
-    return (
-        <div className={`proposed-track-card ${isExpired ? 'expired' : ''}`}>
-            <div className="proposed-track-header">
-                <div className="track-info-main">
-                    <TrackCoverComponentToUse track={voting.track} size="small" />
-                    <div className="track-details">
-                        <div className="track-title">{voting.track?.title || 'Без названия'}</div>
-                        <div className="track-artist">{voting.track?.artist || 'Неизвестный'}</div>
-                        {isNextVoting && voting.current_track && (
-                            <div className="track-next-info">
-                                ⏩ После: {voting.current_track.title}
-                            </div>
-                        )}
-                        <div className="track-proposed-by">
-                            {isNextVoting ? '🎯 Предложил поставить следующим:' : '📝 Предложил:'} {voting.proposed_by}
-                        </div>
-                    </div>
-                </div>
-                <div className="voting-timer-display">
-                    <span className={`timer-icon ${timeRemaining <= 10 ? 'urgent' : ''}`}>⏰</span>
-                    <span className={`timer-value ${timeRemaining <= 10 ? 'urgent' : ''}`}>
-                        {Math.floor(timeRemaining / 60)}:{String(timeRemaining % 60).padStart(2, '0')}
-                    </span>
-                </div>
-            </div>
-            
-            <div className="voting-results-detailed">
-                <div className="votes-bar-container">
-                    <div className="votes-bar">
-                        <div 
-                            className="votes-yes-bar" 
-                            style={{ width: `${totalVotes > 0 ? (votesYesCount / totalVotes) * 100 : 50}%` }}
-                        >
-                            {votesYesCount > 0 && `👍 ${votesYesCount}`}
-                        </div>
-                        <div 
-                            className="votes-no-bar" 
-                            style={{ width: `${totalVotes > 0 ? (votesNoCount / totalVotes) * 100 : 50}%` }}
-                        >
-                            {votesNoCount > 0 && `👎 ${votesNoCount}`}
-                        </div>
-                    </div>
-                </div>
-                
-                <div className="voting-stats-detailed">
-                    <div className="stat-item yes-stat">
-                        <span className="stat-icon">👍</span>
-                        <span className="stat-count">{votesYesCount}</span>
-                        <span className="stat-label">За</span>
-                    </div>
-                    <div className="stat-item no-stat">
-                        <span className="stat-icon">👎</span>
-                        <span className="stat-count">{votesNoCount}</span>
-                        <span className="stat-label">Против</span>
-                    </div>
-                    <div className="stat-item total-stat">
-                        <span className="stat-icon">👥</span>
-                        <span className="stat-count">{totalVotes}/{voting.total_participants}</span>
-                        <span className="stat-label">Проголосовало</span>
-                    </div>
-                </div>
-            </div>
-            
-            <div className="proposed-track-actions">
-                {!hasUserVoted && !isExpired ? (
-                    <div className="vote-buttons-detailed">
-                        <button 
-                            onClick={() => onVote(voting.id, 'yes')} 
-                            className="vote-btn-yes"
-                        >
-                            👍 Голосовать ЗА
-                        </button>
-                        <button 
-                            onClick={() => onVote(voting.id, 'no')} 
-                            className="vote-btn-no"
-                        >
-                            👎 Голосовать ПРОТИВ
-                        </button>
-                    </div>
-                ) : (
-                    <div className="vote-status-detailed">
-                        {hasUserVoted && (
-                            <div className="your-vote-badge">
-                                {voting.user_vote === 'yes' ? '👍 Вы проголосовали ЗА' : '👎 Вы проголосовали ПРОТИВ'}
-                            </div>
-                        )}
-                        {isExpired && <div className="status-badge expired">⏰ Время голосования истекло</div>}
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-});
-
-VotingCard.displayName = 'VotingCard';
