@@ -42,6 +42,10 @@ class Room(BaseModel):
     currentTime: float = 0
     roomIsShuffled: bool = False
     roomRepeatMode: str = "off"
+    votingDuration: int = 60
+    playback_mode: str = "sync"  # 'sync' или 'host'
+    host_id: Optional[str] = None
+    host_queue: List[dict] = []
 
 
 class ChatMessage(BaseModel):
@@ -70,7 +74,8 @@ class VotingSession(BaseModel):
     votes_no: List[str] = []
     voters: List[str] = []
     time_remaining: int = 60
-    
+    duration_seconds: int = 60
+
     class Config:
         arbitrary_types_allowed = True
 
@@ -88,3 +93,4 @@ class VoteNextSession(BaseModel):
     votes_no: List[str] = []
     voters: List[str] = []
     time_remaining: int = 30
+    duration_seconds: int = 30
