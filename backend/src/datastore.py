@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 
-from models import Room, ChatMessage, VotingSession, VoteNextSession, Track, Participant
+from models import Room, ChatMessage, VotingSession, VoteNextSession, Track
 
 
 class DataStore:
@@ -31,10 +31,16 @@ class DataStore:
                     rooms_data = json.load(f)
                     for room_data in rooms_data:
                         room = Room(**room_data)
+                        if not hasattr(room, 'playback_mode'):
+                            room.playback_mode = "sync"
+                        if not hasattr(room, 'host_id'):
+                            room.host_id = None
+                        if not hasattr(room, 'host_queue'):
+                            room.host_queue = []
                         self.rooms[room.id] = room
-                print(f"✅ Загружено {len(self.rooms)} комнат")
+                print(f"Загружено {len(self.rooms)} комнат")
             except Exception as e:
-                print(f"❌ Ошибка загрузки комнат: {e}")
+                print(f"Ошибка загрузки комнат: {e}")
     
     def save_rooms_to_file(self):
         try:
@@ -44,7 +50,7 @@ class DataStore:
                 json.dump(rooms_data, f, ensure_ascii=False, indent=2)
             return True
         except Exception as e:
-            print(f"❌ Ошибка сохранения комнат: {e}")
+            print(f"Ошибка сохранения комнат: {e}")
             return False
     
     def get_user_music_file(self, user_id: str) -> Path:
@@ -60,7 +66,7 @@ class DataStore:
                     for playlist in data.get('playlists', []):
                         for track in playlist.get('tracks', []):
                             if not track.get('url'):
-                                print(f"⚠️ Track {track.get('title')} has no URL")
+                                print(f"Track {track.get('title')} has no URL")
                     return data
             except Exception as e:
                 print(f"Error loading user music data: {e}")
@@ -76,7 +82,12 @@ class DataStore:
     
     def create_voting_session(self, room_id: str, track: Track, user_id: str, user_name: str) -> VotingSession:
         session_id = f"vote_{room_id}_{int(datetime.now().timestamp() * 1000)}"
-        
+
+        room = self.rooms.get(room_id)
+        duration = 60
+        if room:
+            duration = getattr(room, 'votingDuration', 60)
+
         voting_session = VotingSession(
             id=session_id,
             room_id=room_id,
@@ -88,13 +99,14 @@ class DataStore:
             votes_yes=[],
             votes_no=[],
             voters=[],
-            time_remaining=60
+            time_remaining=duration,
+            duration_seconds=duration
         )
-        
+    
         self.voting_sessions[session_id] = voting_session
         self.room_voting[room_id] = session_id
         return voting_session
-    
+
     def set_voting_task(self, session_id: str, task: asyncio.Task):
         self.voting_tasks[session_id] = task
     
@@ -107,21 +119,32 @@ class DataStore:
     def cast_vote_on_session(self, session_id: str, user_id: str, vote: str) -> Dict[str, Any]:
         if session_id not in self.voting_sessions:
             return {"error": "Session not found"}
-        
+
         session = self.voting_sessions[session_id]
-        
+
         if session.status != "active":
             return {"error": "Voting session is not active"}
-        
+
+        # Проверяем, голосовал ли уже пользователь
         if user_id in session.voters:
             return {"error": "User already voted"}
-        
+
+        # Добавляем пользователя в список проголосовавших
         session.voters.append(user_id)
+
+        # Добавляем голос в соответствующий список
         if vote == "yes":
-            session.votes_yes.append(user_id)
+            if user_id not in session.votes_yes:
+                session.votes_yes.append(user_id)
+        elif vote == "no":
+            if user_id not in session.votes_no:
+                session.votes_no.append(user_id)
         else:
-            session.votes_no.append(user_id)
-        
+            return {"error": "Invalid vote value"}
+
+        # Сохраняем изменения
+        self.voting_sessions[session_id] = session
+
         return {
             "session_id": session_id,
             "votes_yes": len(session.votes_yes),
@@ -170,9 +193,16 @@ class DataStore:
     
     # ==================== ГОЛОСОВАНИЕ "СЛЕДУЮЩИМ" ====================
     
+    
     def create_vote_next_session(self, room_id: str, track: Track, current_track: Track, user_id: str, user_name: str) -> VoteNextSession:
         session_id = f"vote_next_{room_id}_{int(datetime.now().timestamp() * 1000)}"
-        
+
+        # Получаем votingDuration из комнаты
+        room = self.rooms.get(room_id)
+        duration = 60  # значение по умолчанию
+        if room:
+            duration = getattr(room, 'votingDuration', 60)
+
         vote_next_session = VoteNextSession(
             id=session_id,
             room_id=room_id,
@@ -185,13 +215,14 @@ class DataStore:
             votes_yes=[],
             votes_no=[],
             voters=[],
-            time_remaining=30
+            time_remaining=duration,
+            duration_seconds=duration
         )
-        
+
         self.vote_next_sessions[session_id] = vote_next_session
         self.room_vote_next[room_id] = session_id
         return vote_next_session
-    
+
     def set_vote_next_task(self, session_id: str, task: asyncio.Task):
         self.vote_next_tasks[session_id] = task
     
@@ -204,21 +235,28 @@ class DataStore:
     def cast_vote_on_next_session(self, session_id: str, user_id: str, vote: str) -> Dict[str, Any]:
         if session_id not in self.vote_next_sessions:
             return {"error": "Session not found"}
-        
+
         session = self.vote_next_sessions[session_id]
-        
+
         if session.status != "active":
             return {"error": "Voting session is not active"}
-        
+
         if user_id in session.voters:
             return {"error": "User already voted"}
-        
+
         session.voters.append(user_id)
+
         if vote == "yes":
-            session.votes_yes.append(user_id)
+            if user_id not in session.votes_yes:
+                session.votes_yes.append(user_id)
+        elif vote == "no":
+            if user_id not in session.votes_no:
+                session.votes_no.append(user_id)
         else:
-            session.votes_no.append(user_id)
-        
+            return {"error": "Invalid vote value"}
+
+        self.vote_next_sessions[session_id] = session
+
         return {
             "session_id": session_id,
             "votes_yes": len(session.votes_yes),
@@ -266,7 +304,6 @@ class DataStore:
         }
     
     def has_all_voted(self, room_id: str, voting_type: str = "add") -> bool:
-        """Проверка, все ли проголосовали"""
         if voting_type == "add":
             session = self.get_voting_session(room_id)
         else:
@@ -312,21 +349,73 @@ class DataStore:
         
         # Условие победы ЗА: голосов ЗА уже достаточно для победы
         if yes_votes >= needed_to_win:
-            print(f"🎯 Win condition reached for {voting_type}: YES wins! yes={yes_votes}, needed={needed_to_win}")
+            print(f"Win condition reached for {voting_type}: YES wins! yes={yes_votes}, needed={needed_to_win}")
             return True
         
         # Условие победы ПРОТИВ: даже если все оставшиеся проголосуют ЗА, ЗА всё равно не наберут достаточно
         # То есть: no_votes >= needed_to_win ИЛИ yes_votes + remaining_voters < needed_to_win
         if no_votes >= needed_to_win:
-            print(f"🎯 Win condition reached for {voting_type}: NO wins! no={no_votes}, needed={needed_to_win}")
+            print(f"Win condition reached for {voting_type}: NO wins! no={no_votes}, needed={needed_to_win}")
             return True
         
         # Если оставшихся голосов недостаточно, чтобы ЗА победили
         if yes_votes + remaining_voters < needed_to_win:
-            print(f"🎯 Win condition reached for {voting_type}: NO wins mathematically! yes={yes_votes}, remaining={remaining_voters}, needed={needed_to_win}")
+            print(f"Win condition reached for {voting_type}: NO wins mathematically! yes={yes_votes}, remaining={remaining_voters}, needed={needed_to_win}")
             return True
         
         return False
+    
+#================= ОТМЕНА ГОЛОСОВАНИЯ =========================================
+
+    def cancel_voting_session(self, room_id: str, user_id: str) -> Dict[str, Any]:
+
+        # Проверяем голосование типа "add"
+        session_id = self.room_voting.get(room_id)
+        if session_id and session_id in self.voting_sessions:
+            session = self.voting_sessions[session_id]
+            if session.proposed_by_id == user_id and session.status == "active":
+                # Отменяем таймеры
+                self.cancel_voting_task(session_id)
+                self.cancel_voting_task(f"timer_{session_id}")
+
+                # Отмечаем как отменённое
+                session.status = "cancelled"
+
+                # Удаляем из активных
+                if room_id in self.room_voting:
+                    del self.room_voting[room_id]
+
+                return {
+                    "success": True,
+                    "session_id": session_id,
+                    "track": session.track,
+                    "type": "add"
+                }
+
+        # Проверяем голосование типа "next"
+        session_id = self.room_vote_next.get(room_id)
+        if session_id and session_id in self.vote_next_sessions:
+            session = self.vote_next_sessions[session_id]
+            if session.proposed_by_id == user_id and session.status == "active":
+                # Отменяем таймеры
+                self.cancel_vote_next_task(session_id)
+                self.cancel_vote_next_task(f"timer_{session_id}")
+
+                # Отмечаем как отменённое
+                session.status = "cancelled"
+
+                # Удаляем из активных
+                if room_id in self.room_vote_next:
+                    del self.room_vote_next[room_id]
+
+                return {
+                    "success": True,
+                    "session_id": session_id,
+                    "track": session.track,
+                    "type": "next"
+                }
+
+        return {"success": False, "error": "No active voting session found or you are not the author"}
 
 
 # Глобальный экземпляр
